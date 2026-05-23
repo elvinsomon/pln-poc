@@ -1,0 +1,19 @@
+# Configuración local por miembro / entorno.
+#
+# 1. Copia este fichero a `configs/local.yaml`.
+# 2. Ajusta `dataset_on_drive` a la ruta del CSV en TU Drive.
+# 3. `configs/local.yaml` está en .gitignore — no se sube nunca al repo.
+
+# Ruta absoluta del CSV NLBSE'23 dentro de Drive, tal como aparece tras montar.
+# Sugerencia: añade "Añadir acceso directo a Mi unidad" a la carpeta compartida
+# y la ruta será '/content/drive/MyDrive/<NOMBRE_DEL_ACCESO>/...csv'.
+dataset_on_drive: /content/drive/MyDrive/MULCIA-PLN/data/nlbse23-issue-classification-train.csv
+
+# Si true, copia el CSV de Drive a /content/_dataset_cache/ la primera vez
+# y enlaza el path local del repo a esa copia. Subsiguientes lecturas son
+# 10-20× más rápidas (disco local vs Drive). El cache se pierde al reciclar
+# la VM de Colab; no es un problema.
+copy_to_local: true
+
+# Ruta donde se cachea localmente. Útil cambiarla solo en entornos no-Colab.
+local_cache_dir: /content/_dataset_cache

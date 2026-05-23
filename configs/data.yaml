@@ -1,0 +1,13 @@
+extends: base.yaml
+sample_per_class: 10000     # cap por clase; bottleneck = question (~114k disponibles)
+max_text_chars: 5000        # trunca body para evitar outliers de 259KB
+val_fraction: 0.1
+test_fraction: 0.1          # hold-out estratificado del CSV train
+anonymize:
+  emails: true
+  urls: true
+  handles: true
+clean:
+  strip_code_blocks: true
+  strip_markdown: true
+  normalize_whitespace: true

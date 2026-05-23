@@ -1,0 +1,18 @@
+extends: base.yaml
+experiment_name: tfidf_svm
+vectorizer:
+  ngram_range: [1, 2]
+  min_df: 5
+  max_df: 0.95
+  max_features: 100000
+  sublinear_tf: true
+  lowercase: true
+classifier:
+  C: 1.0
+  loss: squared_hinge
+  class_weight: balanced
+  max_iter: 5000
+grid_search:
+  enabled: false
+  C: [0.1, 1.0, 10.0]
+  ngram_range: [[1, 1], [1, 2]]

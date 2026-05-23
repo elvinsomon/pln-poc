@@ -2,22 +2,181 @@
 
 Prueba de Concepto para la **Entrega 3** del Proyecto Longitudinal de Diseño de Sistemas PLN (MULCIA, curso 2025–26).
 
-Implementa el componente **C2 (categorización temática)** del sistema de triaje automático descrito en el TDT.
+Implementa el componente **C2 (categorización temática)** del sistema de triaje automático descrito en el TDT, sobre el dataset **NLBSE'23** (3 clases: `bug` / `feature` / `question`).
 
-## Estructura
+> **Estado actual — iteración 1:** EDA + majority baseline + TF-IDF+SVM con interpretabilidad. BERT fine-tuning y análisis de errores en próximas iteraciones.
+
+**Equipo:** Izaskun Peña Arranz · Miguel Ángel Rodríguez Ortega · Elvin Somón Sánchez.
+
+---
+
+## 1. Modelo de despliegue
+
+Separación entre **código** y **datos**:
+
+| Recurso     | Dónde vive                                       | Cómo se accede                                                |
+| ----------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| **Código**  | GitHub: `https://github.com/elvinsomon/pln-poc`  | `git clone` en local o Colab (`/content/pln-poc`)              |
+| **Dataset** | Google Drive (carpeta compartida, 1.5 GB)        | Drive mount + symlink al path `data/raw/` que esperan configs  |
+| **Salidas** | Locales al entorno (splits, modelos, métricas)   | Excluidas de git via `.gitignore`; se regeneran reproducibles  |
+
+Drive **no aloja el proyecto**, solo el CSV. Esto evita ramas distintas por entorno y simplifica el control de versiones.
+
+---
+
+## 2. Estructura del repositorio
 
 ```
 PoC-C2/
-├── configs/      # Hiperparámetros por experimento
-├── data/         # Datasets (no versionar)
-├── models/       # Checkpoints entrenados (no versionar)
-├── notebooks/    # EDA y exploración
-├── reports/      # Métricas, figuras, informe
-└── src/          # Código del pipeline
+├── configs/                  # Hiperparámetros por experimento (YAML con `extends:`)
+│   ├── base.yaml             # seed, clases, paths relativos
+│   ├── data.yaml             # muestreo balanceado, anonimización, limpieza
+│   ├── tfidf_svm.yaml        # TF-IDF + LinearSVC
+│   ├── local.example.yaml    # plantilla de config local (ruta Drive del CSV)
+│   └── local.yaml            # tu config personal (.gitignored — crear desde plantilla)
+├── data/                     # (.gitignore — se regenera)
+│   ├── raw/                  # CSV NLBSE'23 (symlink desde Drive en Colab)
+│   ├── processed/            # cachés del EDA (eda_stats.pkl, eda_sample_50k.parquet)
+│   └── splits/               # train/val/test.parquet
+├── models/                   # (.gitignore) checkpoints joblib
+├── notebooks/
+│   ├── 00_bootstrap_test.ipynb     # smoke test entorno (1ª vez por persona)
+│   ├── 01_eda.ipynb                # EDA del corpus + decisiones de preprocesado
+│   ├── 02_baseline_majority.ipynb  # DummyClassifier — referencia trivial
+│   └── 03_tfidf_svm.ipynb          # baseline vectorial + interpretabilidad
+├── reports/
+│   └── metrics/              # JSONs por experimento (output reproducible)
+├── src/
+│   ├── utils/
+│   │   ├── colab.py          # bootstrap Colab/local, mount Drive, link_dataset
+│   │   ├── config.py         # loader YAML con herencia `extends:`
+│   │   └── seeds.py          # set_seed (numpy + random + PYTHONHASHSEED)
+│   ├── data/
+│   │   ├── loader.py         # lectura CSV (chunked, dtypes)
+│   │   ├── clean.py          # strip code/markdown/whitespace, truncate
+│   │   ├── anonymize.py      # emails/URLs/handles → <EMAIL>/<URL>/<USER>
+│   │   └── splits.py         # filtrar documentation, balancear, train/val/test
+│   ├── models/
+│   │   ├── majority.py       # DummyClassifier wrapper
+│   │   └── tfidf_svm.py      # build_pipeline + extract_top_features
+│   └── evaluation/
+│       └── metrics.py        # accuracy, F1-macro, matriz confusión, persistencia JSON
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
-## Equipo
+---
 
-- Izaskun Peña Arranz
-- Miguel Ángel Rodríguez Ortega
-- Elvin Somón Sánchez
+## 3. Puesta en marcha
+
+### 3.1 Colab (recomendado para el equipo)
+
+#### Paso 1 — acceso al Drive compartido
+
+1. Pide al owner que comparta contigo la carpeta de Drive que contiene `nlbse23-issue-classification-train.csv`.
+2. En Drive, abre **Compartido conmigo**, localiza la carpeta y haz clic derecho → **Añadir acceso directo a Mi unidad** (importante: si no lo añades a tu unidad, Colab no la verá bajo `/content/drive/MyDrive/`).
+3. Anota la ruta exacta del CSV tal como queda bajo `Mi unidad`. Ejemplos típicos:
+   - `/content/drive/MyDrive/MULCIA-PLN/data/nlbse23-issue-classification-train.csv`
+   - `/content/drive/MyDrive/Shared/PLN/nlbse23-...csv`
+
+#### Paso 2 — `configs/local.yaml`
+
+Cada miembro mantiene su **propia** configuración local (ruta personal del CSV, flag de cache, etc.) en `configs/local.yaml`, que está en `.gitignore` y no se comparte. Plantilla versionada: `configs/local.example.yaml`.
+
+En Colab esto se hace una sola vez tras clonar el repo. Desde un notebook:
+
+```python
+!cp configs/local.example.yaml configs/local.yaml
+# Edita configs/local.yaml en el explorador de archivos de Colab y ajusta `dataset_on_drive`.
+```
+
+En local: igual (`cp` desde terminal y editar con tu editor preferido).
+
+#### Paso 3 — ejecutar notebooks
+
+1. Abre cualquier notebook de `notebooks/` desde GitHub con *Open in Colab* (o navega a `https://colab.research.google.com/github/elvinsomon/pln-poc/blob/main/notebooks/00_bootstrap_test.ipynb`).
+2. La primera celda de **cada notebook** ejecuta automáticamente:
+   - `git clone https://github.com/elvinsomon/pln-poc` en `/content/pln-poc`.
+   - `pip install -r requirements.txt`.
+   - `bootstrap_dataset(cfg)` → monta Drive, lee `configs/local.yaml`, copia el CSV a `/content/_dataset_cache/` la primera vez (si `copy_to_local: true`), y symlinka al path esperado por los configs.
+3. Empieza por `00_bootstrap_test.ipynb`. Si pasa sin errores, los demás notebooks funcionarán.
+
+> **Por qué `copy_to_local: true`:** lectura por symlink desde Drive es 10-20× más lenta que disco local de Colab (≈ 5-15 MB/s vs 200 MB/s). La copia inicial tarda ~2-3 min y se hace una sola vez por sesión de VM. Recomendado para el EDA, que streamea 1.5 GB.
+
+### 3.2 Local
+
+```bash
+git clone https://github.com/elvinsomon/pln-poc.git
+cd pln-poc
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Coloca el CSV manualmente (o crea un symlink) en:
+#   data/raw/nlbse23-issue-classification-train.csv
+
+# `configs/local.yaml` no es necesario en local
+# (bootstrap_dataset detecta que no estás en Colab y omite Drive).
+
+jupyter lab
+```
+
+Los notebooks detectan ausencia de Colab y saltan el bloque de clone/mount/symlink.
+
+### 3.3 Orden de ejecución (iteración 1)
+
+| Orden | Notebook                          | Hace                                                  | Tiempo aprox. |
+| ----- | --------------------------------- | ----------------------------------------------------- | ------------- |
+| 1     | `00_bootstrap_test.ipynb`         | Verifica entorno, imports, configs, dataset           | <1 min        |
+| 2     | `01_eda.ipynb`                    | EDA del corpus (clases, longitudes, fenómenos PLN)    | 5–15 min      |
+| 3     | `02_baseline_majority.ipynb`      | DummyClassifier → establece el suelo                  | 1–2 min       |
+| 4     | `03_tfidf_svm.ipynb`              | TF-IDF + LinearSVC + top tokens + persistencia        | 2–5 min       |
+
+`prepare_splits()` es **idempotente**: la primera ejecución lee el CSV (1.5 GB), filtra `documentation`, aplica anonimización + limpieza, muestrea 10k/clase y persiste 3 parquets. Las siguientes ejecuciones cargan los parquets existentes sin rehacer trabajo.
+
+---
+
+## 4. Decisiones de diseño
+
+- **3 clases (sin `documentation`).** El TDT E2 §8.1 fija el problema en `bug`/`feature`/`question`. El CSV real incluye una cuarta clase (`documentation`, 4.3 %) que filtramos. Decisión documentada como revisión respecto a E2 en el informe final.
+- **Muestreo balanceado** (10k/clase = 30k train) en lugar del parquet desbalanceado original. Reduce el sesgo hacia clases mayoritarias y permite leer interpretaciones del SVM sin que dominen los términos de `bug`.
+- **Anonimización mínima** (C0 del sistema: emails, URLs, handles → tokens placeholder) como paso previo obligatorio para alinearse con el requisito RGPD del TDT §4.
+- **Test set como hold-out estratificado** del CSV `train` (10 %) en lugar del split test oficial del paper. Razón: el hold-out interno garantiza arrancar la PoC sin esperar a la descarga del archivo separado de test.
+
+---
+
+## 5. Reproducibilidad
+
+- Seed fija (`42`) en `configs/base.yaml`, aplicada vía `setup_environment()`.
+- Versiones de librerías pinned en `requirements.txt`.
+- Splits persistidos en `data/splits/` tras la primera generación: cualquier miembro que regenere obtiene los mismos datos.
+- Métricas y modelos persistidos en `reports/metrics/` y `models/`.
+
+---
+
+## 6. Convenciones de equipo
+
+- **Limpiar outputs antes de hacer commit** (`Kernel → Restart & Clear Output` o `nbstripout`). Notebooks con outputs voluminosos rompen el diff visual y crecen el repo.
+- **No editar la misma notebook simultáneamente.** Coordinar por canal antes de tocar `01_eda` o `03_tfidf_svm`.
+- **Toda métrica se guarda** en `reports/metrics/<experimento>.json` vía `save_metrics()`. Centraliza la comparación final.
+- **No comitear** `data/raw/`, `data/processed/`, `data/splits/`, `models/`: ya excluidos en `.gitignore`. El CSV se sube manualmente a la carpeta de Drive compartida.
+
+---
+
+## 7. Próximas iteraciones (fuera de scope aquí)
+
+- `04_bert_finetune.ipynb` + `src/models/bert.py` + `configs/bert.yaml` (añadirá `torch`/`transformers`/`datasets` a requirements).
+- `05_evaluation_compare.ipynb`: tabla comparativa final (majority vs TF-IDF+SVM vs BERT).
+- `06_error_analysis.ipynb`: muestreo de FN/FP, anotación lingüística conectada con TDT §2.
+- Informe E3 (3–4 pp) en `reports/`.
+
+---
+
+## 8. Solución de problemas frecuentes
+
+| Síntoma                                                       | Causa probable                                                      | Solución                                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `FileNotFoundError: data/raw/...csv`                           | `configs/local.yaml` ausente, o `dataset_on_drive` apunta a una ruta que Drive no expone | Crea `local.yaml` desde la plantilla, confirma "Añadir acceso directo a Mi unidad" sobre la carpeta compartida. |
+| `ModuleNotFoundError: src.utils.config`                        | `PROJECT_ROOT` no está en `sys.path`                                | Vuelve a ejecutar la celda 1 (bootstrap) sin saltarla.                |
+| `pyarrow` u otras libs ausentes en Colab tras *Restart runtime* | Colab limpia el venv al reiniciar                                  | Re-ejecuta la celda 1; reinstala con `pip install -r requirements.txt`. |
+| `prepare_splits` reusa parquets viejos tras cambiar el config  | Idempotencia por defecto                                            | Llama `prepare_splits(cfg, project_root, force=True)`.                |

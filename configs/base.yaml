@@ -1,0 +1,9 @@
+seed: 42
+classes: [bug, feature, question]
+paths:
+  raw: data/raw/nlbse23-issue-classification-train.csv
+  processed: data/processed
+  splits: data/splits
+  models: models
+  reports: reports
+  metrics: reports/metrics
