@@ -1,0 +1,70 @@
+{
+  "val": {
+    "accuracy": 0.7713333333333333,
+    "f1_macro": 0.7711080031977572,
+    "f1_per_class": {
+      "bug": 0.7633136094674556,
+      "feature": 0.7940886699507389,
+      "question": 0.7559217301750772
+    },
+    "confusion_matrix": {
+      "labels": [
+        "bug",
+        "feature",
+        "question"
+      ],
+      "matrix": [
+        [
+          774,
+          106,
+          120
+        ],
+        [
+          106,
+          806,
+          88
+        ],
+        [
+          148,
+          118,
+          734
+        ]
+      ]
+    },
+    "report": "              precision    recall  f1-score   support\n\n         bug     0.7529    0.7740    0.7633      1000\n     feature     0.7825    0.8060    0.7941      1000\n    question     0.7792    0.7340    0.7559      1000\n\n    accuracy                         0.7713      3000\n   macro avg     0.7715    0.7713    0.7711      3000\nweighted avg     0.7715    0.7713    0.7711      3000\n"
+  },
+  "test": {
+    "accuracy": 0.7913333333333333,
+    "f1_macro": 0.7908935300799448,
+    "f1_per_class": {
+      "bug": 0.7935735150925024,
+      "feature": 0.8128395061728395,
+      "question": 0.7662675689744924
+    },
+    "confusion_matrix": {
+      "labels": [
+        "bug",
+        "feature",
+        "question"
+      ],
+      "matrix": [
+        [
+          815,
+          89,
+          96
+        ],
+        [
+          88,
+          823,
+          89
+        ],
+        [
+          151,
+          113,
+          736
+        ]
+      ]
+    },
+    "report": "              precision    recall  f1-score   support\n\n         bug     0.7732    0.8150    0.7936      1000\n     feature     0.8029    0.8230    0.8128      1000\n    question     0.7991    0.7360    0.7663      1000\n\n    accuracy                         0.7913      3000\n   macro avg     0.7918    0.7913    0.7909      3000\nweighted avg     0.7918    0.7913    0.7909      3000\n"
+  }
+}
