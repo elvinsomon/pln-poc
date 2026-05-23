@@ -7,3 +7,12 @@ paths:
   models: models
   reports: reports
   metrics: reports/metrics
+
+# Configuración del acceso al dataset desde Colab.
+# Convención de equipo: cada miembro añade "Añadir acceso directo a Mi unidad"
+# sobre la carpeta compartida con nombre `MULCIA-PLN`. Así la ruta es la misma
+# para todos y esta config puede vivir versionada en el repo.
+drive:
+  csv_path: /content/drive/MyDrive/MULCIA-PLN/data/nlbse23-issue-classification-train.csv
+  copy_to_local: true                          # acelera I/O 10-20× (cache en /content/)
+  local_cache_dir: /content/_dataset_cache

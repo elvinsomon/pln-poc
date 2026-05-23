@@ -3,12 +3,13 @@
 Modelo de despliegue:
 - El **código** vive en GitHub. Cada miembro hace `git clone` en su entorno
   (Colab `/content/pln-poc` o local).
-- El **dataset** (1.5 GB) vive en Google Drive, en una carpeta compartida.
-  Cada miembro indica su ruta personal en `configs/local.yaml` (gitignored;
-  plantilla en `configs/local.example.yaml`).
-- `bootstrap_dataset()` se encarga de leer esa config, montar Drive si hace
-  falta, copiar el CSV a un cache local de Colab (acelera I/O 10-20×) y
-  enlazarlo al path que esperan los configs principales (`data/raw/...`).
+- El **dataset** (1.5 GB) vive en Google Drive en una carpeta compartida con
+  nombre fijo `MULCIA-PLN`. Cada miembro añade "Añadir acceso directo a Mi
+  unidad" sobre esa carpeta — así la ruta del CSV (`cfg['drive']['csv_path']`)
+  es la misma para todos y la config va versionada.
+- `bootstrap_dataset()` monta Drive si hace falta, copia el CSV a un cache
+  local de Colab (acelera I/O 10-20×) y lo enlaza al path local
+  (`cfg['paths']['raw']`) que esperan los demás módulos.
 """
 from __future__ import annotations
 
@@ -18,12 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .seeds import set_seed
-
-
-CONFIGS_DIR = Path(__file__).resolve().parents[2] / "configs"
 
 
 def in_colab() -> bool:
@@ -43,25 +39,11 @@ def mount_drive(mount_point: str = "/content/drive") -> str:
     return mount_point
 
 
-def load_local_config() -> dict[str, Any]:
-    """Lee `configs/local.yaml`. Falla con instrucciones si no existe."""
-    path = CONFIGS_DIR / "local.yaml"
-    if not path.exists():
-        example = CONFIGS_DIR / "local.example.yaml"
-        raise FileNotFoundError(
-            f"Falta {path}.\n"
-            f"Copia la plantilla y ajusta `dataset_on_drive` a tu ruta de Drive:\n"
-            f"    cp {example} {path}\n"
-        )
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
 def link_dataset(source: str | Path, target: str | Path, *, overwrite: bool = False) -> Path:
     """Symlink `target → source`. Idempotente.
 
     Si el symlink existe pero apunta a otra fuente: error explícito, salvo
-    que `overwrite=True`. Esto evita pisar sin avisar a otro miembro.
+    que `overwrite=True`. Evita pisar sin avisar.
     """
     src = Path(source).expanduser().resolve()
     tgt = Path(target).expanduser()
@@ -88,9 +70,8 @@ def link_dataset(source: str | Path, target: str | Path, *, overwrite: bool = Fa
 def cache_to_local(source: str | Path, cache_dir: str | Path) -> Path:
     """Copia el CSV de Drive al disco local de Colab la primera vez.
 
-    Lecturas posteriores van por disco local (~200 MB/s) en vez de por
-    Drive (~5-15 MB/s). El cache se pierde al reciclar la VM, lo cual no
-    es problema porque la copia es idempotente.
+    Lecturas posteriores van por disco local (~200 MB/s) en vez de Drive
+    (~5-15 MB/s). El cache se pierde al reciclar la VM; la copia es idempotente.
     """
     src = Path(source).expanduser().resolve()
     if not src.exists():
@@ -106,12 +87,11 @@ def cache_to_local(source: str | Path, cache_dir: str | Path) -> Path:
 
 
 def bootstrap_dataset(cfg: dict[str, Any], *, verbose: bool = True) -> Path:
-    """Pone el CSV al path que los configs esperan (`cfg['paths']['raw']`).
+    """Pone el CSV en el path que esperan los configs (`cfg['paths']['raw']`).
 
-    - **Local:** no toca nada; asume que ya está en `data/raw/`.
-    - **Colab:** monta Drive, lee `configs/local.yaml`, opcionalmente copia
-      el CSV a `local_cache_dir` para acelerar I/O, y symlinka al path
-      esperado.
+    - **Local:** no toca nada; espera que el CSV ya esté en `data/raw/`.
+    - **Colab:** monta Drive, lee `cfg['drive']`, opcionalmente copia a cache
+      local para acelerar I/O, y symlinka al path esperado.
 
     Devuelve la ruta resoluta del CSV.
     """
@@ -124,14 +104,25 @@ def bootstrap_dataset(cfg: dict[str, Any], *, verbose: bool = True) -> Path:
             )
         return target.resolve()
 
+    drive_cfg = cfg.get("drive", {})
+    drive_csv = drive_cfg.get("csv_path")
+    if not drive_csv:
+        raise KeyError("Falta `drive.csv_path` en el config base. Ver configs/base.yaml.")
+
     mount_drive()
-    local = load_local_config()
-    drive_csv = local["dataset_on_drive"]
-    if local.get("copy_to_local", False):
-        cache_dir = local.get("local_cache_dir", "/content/_dataset_cache")
-        actual = cache_to_local(drive_csv, cache_dir)
+
+    drive_path = Path(drive_csv)
+    if not drive_path.exists():
+        raise FileNotFoundError(
+            f"No se encuentra el CSV en {drive_csv}.\n"
+            f"Verifica que has añadido la carpeta compartida `MULCIA-PLN` a tu Mi unidad "
+            f"(Drive → Compartido conmigo → click derecho → Añadir acceso directo a Mi unidad)."
+        )
+
+    if drive_cfg.get("copy_to_local", False):
+        actual = cache_to_local(drive_path, drive_cfg.get("local_cache_dir", "/content/_dataset_cache"))
     else:
-        actual = Path(drive_csv).expanduser().resolve()
+        actual = drive_path.resolve()
 
     link_dataset(actual, target, overwrite=True)
     if verbose:
@@ -140,11 +131,7 @@ def bootstrap_dataset(cfg: dict[str, Any], *, verbose: bool = True) -> Path:
 
 
 def setup_environment(seed: int = 42, project_root: str | Path | None = None) -> Path:
-    """Fija seed, registra `project_root` en sys.path y lo devuelve resuelto.
-
-    Llamar tras `os.chdir(project_root)` (Colab) o desde la raíz del repo
-    (local).
-    """
+    """Fija seed, registra `project_root` en sys.path y lo devuelve resuelto."""
     set_seed(seed)
     root = Path(project_root) if project_root else Path.cwd()
     root = root.resolve()

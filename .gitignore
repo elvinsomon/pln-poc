@@ -11,8 +11,6 @@ data/*
 models/*
 !models/.gitkeep
 
-# Configuración local por miembro (rutas Drive, etc.)
-configs/local.yaml
 
 # Jupyter
 .ipynb_checkpoints/

@@ -29,11 +29,9 @@ Drive **no aloja el proyecto**, solo el CSV. Esto evita ramas distintas por ento
 ```
 PoC-C2/
 ├── configs/                  # Hiperparámetros por experimento (YAML con `extends:`)
-│   ├── base.yaml             # seed, clases, paths relativos
+│   ├── base.yaml             # seed, clases, paths relativos, ruta Drive
 │   ├── data.yaml             # muestreo balanceado, anonimización, limpieza
-│   ├── tfidf_svm.yaml        # TF-IDF + LinearSVC
-│   ├── local.example.yaml    # plantilla de config local (ruta Drive del CSV)
-│   └── local.yaml            # tu config personal (.gitignored — crear desde plantilla)
+│   └── tfidf_svm.yaml        # TF-IDF + LinearSVC
 ├── data/                     # (.gitignore — se regenera)
 │   ├── raw/                  # CSV NLBSE'23 (symlink desde Drive en Colab)
 │   ├── processed/            # cachés del EDA (eda_stats.pkl, eda_sample_50k.parquet)
@@ -74,33 +72,22 @@ PoC-C2/
 
 #### Paso 1 — acceso al Drive compartido
 
-1. Pide al owner que comparta contigo la carpeta de Drive que contiene `nlbse23-issue-classification-train.csv`.
-2. En Drive, abre **Compartido conmigo**, localiza la carpeta y haz clic derecho → **Añadir acceso directo a Mi unidad** (importante: si no lo añades a tu unidad, Colab no la verá bajo `/content/drive/MyDrive/`).
-3. Anota la ruta exacta del CSV tal como queda bajo `Mi unidad`. Ejemplos típicos:
-   - `/content/drive/MyDrive/MULCIA-PLN/data/nlbse23-issue-classification-train.csv`
-   - `/content/drive/MyDrive/Shared/PLN/nlbse23-...csv`
+Convención de equipo: la carpeta compartida se llama **`MULCIA-PLN`** y todos la añaden a su Mi unidad con ese mismo nombre. Así la ruta del CSV es idéntica para todos y la config va versionada (`configs/base.yaml` § `drive`).
 
-#### Paso 2 — `configs/local.yaml`
+1. Pide al owner que comparta contigo la carpeta `MULCIA-PLN` de Drive.
+2. En Drive: **Compartido conmigo** → click derecho sobre `MULCIA-PLN` → **Añadir acceso directo a Mi unidad** → confirmar en la raíz de Mi unidad.
+3. Tras este paso, la ruta `/content/drive/MyDrive/MULCIA-PLN/data/nlbse23-issue-classification-train.csv` debe existir cuando montes Drive.
 
-Cada miembro mantiene su **propia** configuración local (ruta personal del CSV, flag de cache, etc.) en `configs/local.yaml`, que está en `.gitignore` y no se comparte. Plantilla versionada: `configs/local.example.yaml`.
+> **Importante:** si renombras el acceso directo o lo colocas en una subcarpeta, la ruta dejará de coincidir con `configs/base.yaml::drive.csv_path` y el bootstrap fallará. Si necesitas otra ruta, cambia el config en el repo (no individualmente).
 
-En Colab esto se hace una sola vez tras clonar el repo. Desde un notebook:
+#### Paso 2 — ejecutar notebooks
 
-```python
-!cp configs/local.example.yaml configs/local.yaml
-# Edita configs/local.yaml en el explorador de archivos de Colab y ajusta `dataset_on_drive`.
-```
-
-En local: igual (`cp` desde terminal y editar con tu editor preferido).
-
-#### Paso 3 — ejecutar notebooks
-
-1. Abre cualquier notebook de `notebooks/` desde GitHub con *Open in Colab* (o navega a `https://colab.research.google.com/github/elvinsomon/pln-poc/blob/main/notebooks/00_bootstrap_test.ipynb`).
+1. Abre cualquier notebook de `notebooks/` desde GitHub con *Open in Colab* (o `https://colab.research.google.com/github/elvinsomon/pln-poc/blob/main/notebooks/00_bootstrap_test.ipynb`).
 2. La primera celda de **cada notebook** ejecuta automáticamente:
    - `git clone https://github.com/elvinsomon/pln-poc` en `/content/pln-poc`.
    - `pip install -r requirements.txt`.
-   - `bootstrap_dataset(cfg)` → monta Drive, lee `configs/local.yaml`, copia el CSV a `/content/_dataset_cache/` la primera vez (si `copy_to_local: true`), y symlinka al path esperado por los configs.
-3. Empieza por `00_bootstrap_test.ipynb`. Si pasa sin errores, los demás notebooks funcionarán.
+   - `bootstrap_dataset(cfg)` → monta Drive, copia el CSV a `/content/_dataset_cache/` (si `drive.copy_to_local: true`), y symlinka al path esperado por los configs.
+3. Empieza por `00_bootstrap_test.ipynb`. Si pasa sin errores, los demás funcionan.
 
 > **Por qué `copy_to_local: true`:** lectura por symlink desde Drive es 10-20× más lenta que disco local de Colab (≈ 5-15 MB/s vs 200 MB/s). La copia inicial tarda ~2-3 min y se hace una sola vez por sesión de VM. Recomendado para el EDA, que streamea 1.5 GB.
 
@@ -176,7 +163,7 @@ Los notebooks detectan ausencia de Colab y saltan el bloque de clone/mount/symli
 
 | Síntoma                                                       | Causa probable                                                      | Solución                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `FileNotFoundError: data/raw/...csv`                           | `configs/local.yaml` ausente, o `dataset_on_drive` apunta a una ruta que Drive no expone | Crea `local.yaml` desde la plantilla, confirma "Añadir acceso directo a Mi unidad" sobre la carpeta compartida. |
+| `FileNotFoundError: ...MULCIA-PLN/...csv`                      | El acceso directo a Drive no existe o tiene otro nombre              | Repite el paso 1 de §3.1: el shortcut debe llamarse exactamente `MULCIA-PLN` en la raíz de Mi unidad. |
 | `ModuleNotFoundError: src.utils.config`                        | `PROJECT_ROOT` no está en `sys.path`                                | Vuelve a ejecutar la celda 1 (bootstrap) sin saltarla.                |
 | `pyarrow` u otras libs ausentes en Colab tras *Restart runtime* | Colab limpia el venv al reiniciar                                  | Re-ejecuta la celda 1; reinstala con `pip install -r requirements.txt`. |
 | `prepare_splits` reusa parquets viejos tras cambiar el config  | Idempotencia por defecto                                            | Llama `prepare_splits(cfg, project_root, force=True)`.                |
