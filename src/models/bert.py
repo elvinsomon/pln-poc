@@ -105,11 +105,13 @@ class BertClassifier:
             remove_columns=["text"],
         )
 
+        # No pasamos `tokenizer=`: en transformers v5 ese kwarg se eliminó
+        # (sustituido por `processing_class`). El padding lo cubre el data_collator
+        # y el tokenizer se persiste aparte en `.save()`. Omitirlo funciona en 4.46 y 5.x.
         trainer = Trainer(
             model=self.model,
             args=self._training_args(output_dir="/content/_bert_trainer"),
             train_dataset=ds,
-            tokenizer=self.tokenizer,
             data_collator=DataCollatorWithPadding(self.tokenizer),
         )
         trainer.train()
