@@ -1,0 +1,17 @@
+extends: base.yaml
+experiment_name: distilbert
+
+# Candidato B del TDT §7.2: paradigma neuronal contextual (fine-tuning).
+# Requiere GPU para entrenar en tiempo razonable (pensado para Colab T4).
+bert:
+  model_name: distilbert-base-uncased
+  max_length: 256          # el body ya viene truncado a 5000 chars en data.yaml
+  batch_size: 32           # holgado en T4 (16 GB) con fp16 a seq-256
+  epochs: 3                # converge en 24k ejemplos balanceados
+  learning_rate: 2.0e-5    # receta estándar de fine-tuning de transformers
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: true               # se ignora automáticamente fuera de CUDA
+  device: null             # null => autodetecta (cuda > mps > cpu)
+  # Palancas si el entrenamiento excede el presupuesto de tiempo en T4 (~6-8 min):
+  #   bajar max_length a 192  o  epochs a 2.

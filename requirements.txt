@@ -9,3 +9,12 @@ seaborn>=0.13
 jupyter>=1.0
 ipykernel>=6.29
 tqdm>=4.66
+
+# --- Deep learning (iteración 2: notebook 04, DistilBERT fine-tuning) ---
+# Solo necesario para 04; 05 y 06 corren sin estas libs.
+# torch: en Colab ya viene preinstalado y casado con el driver CUDA.
+# Mantener >= (no pin exacto) para no forzar una rueda que rompa la GPU.
+torch>=2.2
+transformers>=4.46      # >=4.46 fija el nombre del arg `eval_strategy`
+datasets>=2.19
+accelerate>=0.30        # requerido por el Trainer moderno

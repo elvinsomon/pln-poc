@@ -4,7 +4,7 @@ Prueba de Concepto para la **Entrega 3** del Proyecto Longitudinal de Diseño de
 
 Implementa el componente **C2 (categorización temática)** del sistema de triaje automático descrito en el TDT, sobre el dataset **NLBSE'23** (3 clases: `bug` / `feature` / `question`).
 
-> **Estado actual — iteración 1:** EDA + majority baseline + TF-IDF+SVM con interpretabilidad. BERT fine-tuning y análisis de errores en próximas iteraciones.
+> **Estado actual — iteración 2:** EDA + majority baseline + TF-IDF+SVM (interpretabilidad) + **DistilBERT fine-tuning** + comparativa de modelos + análisis de errores. Cubre los tres criterios de éxito del E2 §7.2.
 
 **Equipo:** Izaskun Peña Arranz · Miguel Ángel Rodríguez Ortega · Elvin Somón Sánchez.
 
@@ -31,7 +31,8 @@ PoC-C2/
 ├── configs/                  # Hiperparámetros por experimento (YAML con `extends:`)
 │   ├── base.yaml             # seed, clases, paths relativos, ruta Drive
 │   ├── data.yaml             # muestreo balanceado, anonimización, limpieza
-│   └── tfidf_svm.yaml        # TF-IDF + LinearSVC
+│   ├── tfidf_svm.yaml        # TF-IDF + LinearSVC
+│   └── bert.yaml             # DistilBERT fine-tuning (extends base.yaml)
 ├── data/                     # (.gitignore — se regenera)
 │   ├── raw/                  # CSV NLBSE'23 (symlink desde Drive en Colab)
 │   ├── processed/            # cachés del EDA (eda_stats.pkl, eda_sample_50k.parquet)
@@ -41,7 +42,10 @@ PoC-C2/
 │   ├── 00_bootstrap_test.ipynb     # smoke test entorno (1ª vez por persona)
 │   ├── 01_eda.ipynb                # EDA del corpus + decisiones de preprocesado
 │   ├── 02_baseline_majority.ipynb  # DummyClassifier — referencia trivial
-│   └── 03_tfidf_svm.ipynb          # baseline vectorial + interpretabilidad
+│   ├── 03_tfidf_svm.ipynb          # baseline vectorial + interpretabilidad
+│   ├── 04_bert_finetune.ipynb      # DistilBERT fine-tuning (requiere GPU/Colab)
+│   ├── 05_evaluation_compare.ipynb # tabla + barras: majority vs SVM vs BERT
+│   └── 06_error_analysis.ipynb     # FP/FN + fenómenos lingüísticos (E1)
 ├── reports/
 │   └── metrics/              # JSONs por experimento (output reproducible)
 ├── src/
@@ -56,7 +60,8 @@ PoC-C2/
 │   │   └── splits.py         # filtrar documentation, balancear, train/val/test
 │   ├── models/
 │   │   ├── majority.py       # DummyClassifier wrapper
-│   │   └── tfidf_svm.py      # build_pipeline + extract_top_features
+│   │   ├── tfidf_svm.py      # build_pipeline + extract_top_features
+│   │   └── bert.py           # BertClassifier (fit/predict) + build_model
 │   └── evaluation/
 │       └── metrics.py        # accuracy, F1-macro, matriz confusión, persistencia JSON
 ├── requirements.txt
@@ -110,7 +115,7 @@ jupyter lab
 
 Los notebooks detectan ausencia de Colab y saltan el bloque de clone/mount/symlink.
 
-### 3.3 Orden de ejecución (iteración 1)
+### 3.3 Orden de ejecución (iteración 2)
 
 | Orden | Notebook                          | Hace                                                  | Tiempo aprox. |
 | ----- | --------------------------------- | ----------------------------------------------------- | ------------- |
@@ -118,6 +123,13 @@ Los notebooks detectan ausencia de Colab y saltan el bloque de clone/mount/symli
 | 2     | `01_eda.ipynb`                    | EDA del corpus (clases, longitudes, fenómenos PLN)    | 5–15 min      |
 | 3     | `02_baseline_majority.ipynb`      | DummyClassifier → establece el suelo                  | 1–2 min       |
 | 4     | `03_tfidf_svm.ipynb`              | TF-IDF + LinearSVC + top tokens + persistencia        | 2–5 min       |
+| 5     | `04_bert_finetune.ipynb`          | DistilBERT fine-tuning + métricas + predicciones      | 6–8 min (T4)  |
+| 6     | `05_evaluation_compare.ipynb`     | Tabla + barras + margen BERT vs SVM (criterio E2 §2)  | <1 min        |
+| 7     | `06_error_analysis.ipynb`         | FP/FN + fenómenos lingüísticos E1 (criterio E2 §3)    | 1–2 min       |
+
+> **GPU obligatoria para `04`.** Ábrelo en Colab con runtime **T4**; la celda de bootstrap imprime el `device` (debe ser `cuda`). `05` y `06` **no** necesitan GPU.
+>
+> **Dependencia de artefactos:** `05` requiere que `04` haya generado `reports/metrics/bert.json`; `06` requiere `models/tfidf_svm.joblib` (de `03`) y `reports/preds_test_bert.parquet` (de `04`). Como `models/` y los splits están en `.gitignore`, tras un `git clone` fresco hay que correr `03` y `04` antes que `06`. El parquet de predicciones vive en `reports/` (versionable), de modo que `06` no recarga el modelo en GPU.
 
 `prepare_splits()` es **idempotente**: la primera ejecución lee el CSV (1.5 GB), filtra `documentation`, aplica anonimización + limpieza, muestrea 10k/clase y persiste 3 parquets. Las siguientes ejecuciones cargan los parquets existentes sin rehacer trabajo.
 
@@ -152,10 +164,8 @@ Los notebooks detectan ausencia de Colab y saltan el bloque de clone/mount/symli
 
 ## 7. Próximas iteraciones (fuera de scope aquí)
 
-- `04_bert_finetune.ipynb` + `src/models/bert.py` + `configs/bert.yaml` (añadirá `torch`/`transformers`/`datasets` a requirements).
-- `05_evaluation_compare.ipynb`: tabla comparativa final (majority vs TF-IDF+SVM vs BERT).
-- `06_error_analysis.ipynb`: muestreo de FN/FP, anotación lingüística conectada con TDT §2.
-- Informe E3 (3–4 pp) en `reports/`.
+- Informe E3 (3–4 pp) en `reports/`: redacción final apoyada en la tabla comparativa (`reports/metrics/comparison.csv`) y la lectura lingüística de errores (`reports/error_analysis_sampled.csv`).
+- (Opcional) Grid/ajuste de hiperparámetros de DistilBERT; probar checkpoints alternativos (RoBERTa, CodeBERT) si el margen sobre el SVM se queda corto.
 
 ---
 
